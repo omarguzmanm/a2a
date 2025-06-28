@@ -1,30 +1,32 @@
-from python_a2a import AgentNetwork, A2AClient
+from python_a2a import AgentNetwork, Flow
+import asyncio
 
-# Create a network of agents
-network = AgentNetwork(name="Issue Analysis Network")
+async def main():
+    network = AgentNetwork()
+    network.add("issue-analysis", "http://localhost:5001")
+    network.add("code-generator", "http://localhost:5002")
+    network.add("docs-generator", "http://localhost:5003")
+    
+    flow = Flow(agent_network=network, name="Solve issues with code generation and documentation")
+    flow.ask("issue-analysis", "{issue}")
+    
+    parallel_results = (flow.parallel()
+        .ask("code-generator", "{latest_result}")
+        .branch()
+        .ask("docs-generator", "{latest_result}")
+        .end_parallel(max_concurrency=2))
+    
+    flow.execute_function(
+        lambda results, context: f"Code: {results['1']}\nDocs : {results['2']}",
+        parallel_results
+    )
+    
+    # Execute the workflow
+    result = await flow.run({
+        "issue": "Create a simple Python script that prints 'Hello, World!'"
+    })
+    
+    print(result)
 
-# Add agents in different ways
-network.add("analyze-issue", "http://127.0.0.1:5000")  # From URL
-# network.add("medications", A2AClient("http://localhost:5002"))  # From client instance
-
-# Discover agents from a list of URLs
-# discovered_count = network.discover_agents([
-#     "http://localhost:5003",
-#     "http://localhost:5004",
-#     "http://localhost:5005"
-# ])
-# print(f"Discovered {discovered_count} new agents")
-
-# List all agents in the network
-for agent_info in network.list_agents():
-    print(f"Agent Info: {agent_info}")
-    print(f"Agent: {agent_info['name']}")
-    print(f"URL: {agent_info['url']}")
-    if 'description' in agent_info:
-        print(f"Description: {agent_info['description']}")
-    print()
-
-# Get a specific agent
-agent = network.get_agent("analyze-issue")
-response = agent.ask("I want to create a calculator in Python")
-print(f"Response: {response}")
+if __name__ == "__main__":
+    asyncio.run(main())
